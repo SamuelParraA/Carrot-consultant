@@ -112,8 +112,9 @@ function selectGene(g){
 
 function lineSvg(series, error=false){
   const times = sampleOrder(), W=850,H=350,p={l:70,r:35,t:36,b:62};
-  let all = series.flatMap(x => times.map(t => (x.stats[t]?.mean||0)+(x.stats[t]?.sd||0)));
-  let max = niceYAxisMax(Math.max(...all, 0)), mid = max/2;
+  let all = series.flatMap(x => times.map(t => Number(x.stats[t]?.mean || 0) + Number(x.stats[t]?.sd || 0)));
+  let dataMax = Math.max(0, ...all.filter(Number.isFinite));
+  let max = niceYAxisMax(dataMax), mid = max/2;
   let x = i => times.length === 1 ? W/2 : p.l+i*(W-p.l-p.r)/(times.length-1);
   let y = v => H-p.b-v/max*(H-p.t-p.b);
   let colors = ['#0f7659','#c1522b','#4467a8','#8b5aa5','#aa8b19','#168a8a','#444'];
@@ -130,10 +131,9 @@ function lineSvg(series, error=false){
 
 function niceYAxisMax(value){
   if (!(value > 0)) return 1;
-  const target = value * 1.1;
-  const exponent = Math.floor(Math.log10(target));
+  const exponent = Math.floor(Math.log10(value));
   const magnitude = 10 ** exponent;
-  const fraction = target / magnitude;
+  const fraction = value / magnitude;
   const niceFraction = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10;
   return niceFraction * magnitude;
 }
