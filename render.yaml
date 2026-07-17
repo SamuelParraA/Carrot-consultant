@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: carrot-tpm-consultant
+    runtime: docker
+    dockerfilePath: ./Dockerfile.standalone
+    plan: free
+    healthCheckPath: /

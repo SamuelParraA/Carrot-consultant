@@ -1,0 +1,10 @@
+sample,timepoint,replicate,group,treatment,order
+G1_rep1,Raíz en oscuridad · 4 semanas,1,Dark_4w,Oscuridad,1
+G1_rep2,Raíz en oscuridad · 4 semanas,2,Dark_4w,Oscuridad,2
+G1_rep3,Raíz en oscuridad · 4 semanas,3,Dark_4w,Oscuridad,3
+SRR11600393,Raíz en oscuridad · 8 semanas,1,Dark_8w,Oscuridad,4
+SRR11600394,Raíz en oscuridad · 8 semanas,2,Dark_8w,Oscuridad,5
+SRR11600395,Raíz en oscuridad · 8 semanas,3,Dark_8w,Oscuridad,6
+SRR11600390,Raíz expuesta a luz · 8 semanas,1,Light_8w,Luz,7
+SRR11600391,Raíz expuesta a luz · 8 semanas,2,Light_8w,Luz,8
+SRR11600392,Raíz expuesta a luz · 8 semanas,3,Light_8w,Luz,9
