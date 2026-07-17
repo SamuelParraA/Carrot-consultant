@@ -1,5 +1,6 @@
 const $ = s => document.querySelector(s);
 let genes = [], selected = null, original = [], lastSvg = '', suggestTimer, appInfo = null, activeExperiment = 'default';
+const displayName = g => decodeURIComponent(String(g.description || g.name || g.gene_id || '')).replace(/, transcript variant.*$/i, '');
 const fmt = n => n == null ? '—' : Number(n).toLocaleString('es-CL', {maximumFractionDigits: 3});
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function api(url){let r=await fetch(url);if(!r.ok)throw Error((await r.json()).error);return r.json()}
@@ -28,7 +29,7 @@ async function suggest(){
   try{
     let rows = await api('/api/search?q=' + encodeURIComponent(term) + experimentParam());
     if(!rows.length){box.innerHTML = '<div class="result"><small>Sin coincidencias</small></div>'; box.classList.remove('hidden'); return}
-    box.innerHTML = rows.map((r,i)=>`<div class="result" data-id="${esc(r.gene_id)}"><b>${i+1}. ${esc(r.alias||r.name||r.gene_id)}</b><small>${esc(r.gene_id)} · ${esc(r.description||'Sin descripción')}</small></div>`).join('');
+    box.innerHTML = rows.map((r,i)=>`<div class="result" data-id="${esc(r.gene_id)}"><b>${i+1}. ${esc(displayName(r))}</b><small>${esc(r.gene_id)} · ${esc(displayName(r))}</small></div>`).join('');
     box.classList.remove('hidden');
     box.querySelectorAll('[data-id]').forEach(el => el.onclick = () => {
       let parts = input.split(/([,;\n])/); parts[parts.length-1] = ' ' + el.dataset.id;
@@ -73,7 +74,7 @@ function renderSummary(){
   $('#summary-head').innerHTML = '<tr><th>Nombre</th><th>GeneID</th><th>Descripción</th>' + times.map(t=>`<th>${esc(t)}</th>`).join('') + '</tr>';
   $('#summary-body').innerHTML = genes.map(g => {
     let s = stats(g);
-    return `<tr data-id="${esc(g.gene_id)}"><td><b>${esc(g.alias||g.name||g.gene_id)}</b></td><td>${esc(g.gene_id)}</td><td class="desc">${esc(g.description||'Sin descripción')}</td>${times.map(t=>`<td class="num">${fmt(s[t]?.mean)}</td>`).join('')}</tr>`;
+    return `<tr data-id="${esc(g.gene_id)}"><td><b>${esc(displayName(g))}</b></td><td>${esc(g.gene_id)}</td><td class="desc">${esc(displayName(g))}</td>${times.map(t=>`<td class="num">${fmt(s[t]?.mean)}</td>`).join('')}</tr>`;
   }).join('');
   document.querySelectorAll('#summary-body tr').forEach(r => r.onclick = () => selectGene(genes.find(g => g.gene_id === r.dataset.id)));
 }
@@ -81,8 +82,8 @@ function renderSummary(){
 function selectGene(g){
   selected = g; let s = stats(g), times = sampleOrder();
   $('#gene-id').textContent = g.gene_id;
-  $('#gene-name').textContent = g.alias || g.name || g.gene_id;
-  $('#description').textContent = g.description || 'Sin descripción funcional en el GFF';
+  $('#gene-name').textContent = displayName(g);
+  $('#description').textContent = displayName(g) || 'Sin descripción funcional en RefSeq';
   $('#location').textContent = `${g.seqid}:${fmt(g.start)}–${fmt(g.end)} (${g.strand})`;
   $('#max-tpm').textContent = fmt(Math.max(...times.map(t=>s[t]?.mean||0)));
   $('#tx-count').textContent = g.transcripts.length;
@@ -93,7 +94,7 @@ function selectGene(g){
   let official = [['Nombre',g.name],['Alias',g.alias],['GeneID',g.gene_id],['Biotipo',g.go],['Cromosoma',g.seqid],['Coordenadas',`${g.start}–${g.end}`],['Hebra',g.strand],['Número de transcritos',g.exon_count],['Longitud gen',g.gene_length],['Descripción',g.description]];
   let curated = (g.curated_annotations || []).map(a => [`${a.source} · ${a.field}`, a.value]);
   $('#annotation').innerHTML = official.concat(curated).filter(x=>x[1]).map(x=>`<div><b>${esc(x[0])}</b>${esc(x[1]||'No disponible')}</div>`).join('');
-  lastSvg = lineSvg([{name:g.alias||g.gene_id, stats:s}], true);
+  lastSvg = lineSvg([{name:displayName(g), stats:s}], true);
   $('#chart').innerHTML = lastSvg;
 }
 
@@ -116,7 +117,7 @@ function lineSvg(series, error=false){
 }
 
 function renderMulti(){
-  let s = genes.map(g => ({name:g.alias||g.gene_id, stats:stats(g)}));
+  let s = genes.map(g => ({name:displayName(g), stats:stats(g)}));
   $('#multi-chart').innerHTML = lineSvg(s);
   $('#legend').innerHTML = s.map((g,i)=>`<span><i style="background:${['#0f7659','#c1522b','#4467a8','#8b5aa5','#aa8b19','#168a8a','#444'][i%7]}"></i>${esc(g.name)}</span>`).join('');
 }
@@ -126,14 +127,14 @@ function renderHeatmap(){
   let maxima = genes.map(g => Math.max(...times.map(t=>stats(g)[t]?.mean||0), 1));
   $('#heatmap').innerHTML = `<div class="heat-cell"><span></span>${times.map(t=>`<span><b>${esc(t)}</b></span>`).join('')}</div>` + genes.map((g,j)=>{
     let s = stats(g);
-    return `<div class="heat-cell"><span class="heat-gene">${esc(g.alias||g.gene_id)}</span>${times.map(t=>{let v=s[t]?.mean; let a=v==null?0:v/maxima[j]; return `<span title="${fmt(v)} TPM" style="background:${v==null?'#eee':`rgba(15,118,89,${.12+.88*a})`};color:${a>.55?'white':'#162621'}">${fmt(v)}</span>`}).join('')}</div>`;
+    return `<div class="heat-cell"><span class="heat-gene">${esc(displayName(g))}</span>${times.map(t=>{let v=s[t]?.mean; let a=v==null?0:v/maxima[j]; return `<span title="${fmt(v)} TPM" style="background:${v==null?'#eee':`rgba(15,118,89,${.12+.88*a})`};color:${a>.55?'white':'#162621'}">${fmt(v)}</span>`}).join('')}</div>`;
   }).join('') + '<p class="heat-legend">Color más intenso = mayor TPM promedio dentro de ese gen. Columnas según metadatos del experimento activo.</p>';
 }
 
 $('#sort').onchange = e => {let mode=e.target.value, times=sampleOrder(); if(mode==='manual') genes=[...original]; if(mode==='max') genes.sort((a,b)=>Math.max(...times.map(t=>stats(b)[t]?.mean||0))-Math.max(...times.map(t=>stats(a)[t]?.mean||0))); if(mode==='fold') genes.sort((a,b)=>fold(b)-fold(a)); if(mode==='similarity') genes.sort((a,b)=>peak(a)-peak(b)); render()};
 const fold = g => {let times=sampleOrder(), s=stats(g), a=s[times[0]]?.mean||.0001; return Math.max(...times.map(t=>s[t]?.mean||0))/a};
 const peak = g => {let times=sampleOrder(), s=stats(g), values=times.map(t=>s[t]?.mean||0); return values.indexOf(Math.max(...values))};
-function tableRows(){let times=sampleOrder(); return [['Nombre','GeneID','Descripción',...times],...genes.map(g=>{let s=stats(g); return [g.alias||g.name,g.gene_id,g.description,...times.map(t=>s[t]?.mean)]})]}
+function tableRows(){let times=sampleOrder(); return [['Nombre','GeneID','Descripción',...times],...genes.map(g=>{let s=stats(g); return [displayName(g),g.gene_id,displayName(g),...times.map(t=>s[t]?.mean)]})]}
 function blob(text,type,name){let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
 $('#csv').onclick=()=>blob('\ufeff'+tableRows().map(r=>r.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n'),'text/csv','expresion_transcriptomica.csv');
 $('#excel').onclick=()=>blob(`<table>${tableRows().map(r=>'<tr>'+r.map(v=>`<td>${esc(v)}</td>`).join('')+'</tr>').join('')}</table>`,'application/vnd.ms-excel','expresion_transcriptomica.xls');

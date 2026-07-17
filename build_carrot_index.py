@@ -7,6 +7,7 @@ import csv
 import sqlite3
 from collections import defaultdict
 from pathlib import Path
+from urllib.parse import unquote
 
 
 ROOT = Path(__file__).resolve().parent
@@ -49,7 +50,7 @@ def main() -> None:
     for row in read_tsv(PROJECT / "06_expression" / "Gene_TPM.tsv"):
         gene_id = row["GeneID"]; info = annotation.get(gene_id, {})
         alias = "; ".join(sorted(aliases.get(gene_id, set()) | knowledge.get(gene_id, set())))
-        description = info.get("Product") or row.get("Product", "")
+        description = unquote(info.get("Product") or row.get("Product", ""))
         search = " ".join([gene_id, row.get("Gene", ""), alias, description, info.get("Biotype", "")]).lower()
         con.execute("INSERT INTO genes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (gene_id, alias, row.get("Gene", gene_id), description, info.get("Biotype", ""), "", "", gene_id, info.get("Chromosome", ""), int(info.get("Start") or 0), int(info.get("End") or 0), info.get("Strand", ""), int(row.get("TranscriptCount") or 0), max(0, int(info.get("End") or 0) - int(info.get("Start") or 0) + 1), 0, "", search))
         for canonical in sorted(knowledge.get(gene_id, set())): con.execute("INSERT INTO gene_annotations VALUES (?,?,?,?)", (gene_id, "Knowledge Engine", "CanonicalName", canonical))

@@ -404,6 +404,13 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             qs = parse_qs(parsed.query)
             experiment_id = qs.get("experiment", [self.default_experiment(con)])[0]
+            if self.is_multi_experiment(con):
+                exists = con.execute(
+                    "SELECT 1 FROM experiments WHERE experiment_id=?",
+                    (experiment_id,),
+                ).fetchone()
+                if not exists:
+                    experiment_id = self.default_experiment(con)
             if parsed.path == "/api/info":
                 if self.is_multi_experiment(con):
                     experiments = [dict(row) for row in con.execute("SELECT * FROM experiments ORDER BY name")]
