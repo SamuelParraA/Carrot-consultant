@@ -430,7 +430,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if len(query) < 2:
                     return self.send_json([])
                 escaped = query.replace("%", "\\%").replace("_", "\\_")
-                rows = con.execute("""SELECT gene_id, alias, name, description, seqid, start, end, strand
+                rows = con.execute("""SELECT gene_id, alias, name, dcar, description, seqid, start, end, strand
                     FROM genes WHERE search_text LIKE ? ESCAPE '\\' LIMIT 300""", (f"%{escaped}%",)).fetchall()
                 ranked = sorted(rows, key=lambda row: (-self.rank_gene(row, query), row["gene_id"]))[:10]
                 return self.send_json([dict(row) | {"match_score": round(self.rank_gene(row, query), 2)} for row in ranked])

@@ -12,6 +12,7 @@ from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parent
 PROJECT = Path(r"I:\transcriptomica\daucus_carota")
+CROSSWALK = ROOT / "reference" / "DCAR_crosswalk.tsv"
 
 
 def read_tsv(path: Path):
@@ -21,6 +22,7 @@ def read_tsv(path: Path):
 
 def main() -> None:
     annotation = {row["GeneID"]: row for row in read_tsv(PROJECT / "07_annotation" / "Annotation_master.tsv")}
+    dcar = {row["GeneID"]: row["DCAR"] for row in read_tsv(CROSSWALK) if row.get("GeneID") and row.get("DCAR")}
     aliases: dict[str, set[str]] = defaultdict(set)
     for row in read_tsv(PROJECT / "08_knowledge" / "Aliases.tsv"):
         if row["Alias"].strip(): aliases[row["GeneID"]].add(row["Alias"].strip())
@@ -32,7 +34,7 @@ def main() -> None:
     con = sqlite3.connect(database)
     con.executescript("""
         CREATE TABLE experiments (experiment_id TEXT PRIMARY KEY, name TEXT, path TEXT, metadata_path TEXT);
-        CREATE TABLE genes (gene_id TEXT PRIMARY KEY, alias TEXT, name TEXT, description TEXT, go TEXT, interpro TEXT, pfam TEXT, dbxref TEXT, seqid TEXT, start INTEGER, end INTEGER, strand TEXT, exon_count INTEGER, gene_length INTEGER, mrna_length INTEGER, transcripts TEXT, search_text TEXT);
+        CREATE TABLE genes (gene_id TEXT PRIMARY KEY, alias TEXT, name TEXT, dcar TEXT, description TEXT, go TEXT, interpro TEXT, pfam TEXT, dbxref TEXT, seqid TEXT, start INTEGER, end INTEGER, strand TEXT, exon_count INTEGER, gene_length INTEGER, mrna_length INTEGER, transcripts TEXT, search_text TEXT);
         CREATE TABLE gene_annotations (gene_id TEXT, source TEXT, field TEXT, value TEXT);
         CREATE TABLE samples (experiment_id TEXT, sample TEXT, label TEXT, timepoint TEXT, replicate TEXT, group_name TEXT, treatment TEXT, color TEXT, comments TEXT, sort_order INTEGER, PRIMARY KEY (experiment_id, sample));
         CREATE TABLE expression (experiment_id TEXT, gene_id TEXT, sample TEXT, tpm REAL, reads REAL, PRIMARY KEY (experiment_id, gene_id, sample));
@@ -49,10 +51,12 @@ def main() -> None:
     expression_rows = []
     for row in read_tsv(PROJECT / "06_expression" / "Gene_TPM.tsv"):
         gene_id = row["GeneID"]; info = annotation.get(gene_id, {})
-        alias = "; ".join(sorted(aliases.get(gene_id, set()) | knowledge.get(gene_id, set())))
+        dcar_tag = dcar.get(gene_id, "")
+        alias = "; ".join(sorted(aliases.get(gene_id, set()) | knowledge.get(gene_id, set()) | ({dcar_tag} if dcar_tag else set())))
         description = unquote(info.get("Product") or row.get("Product", ""))
-        search = " ".join([gene_id, row.get("Gene", ""), alias, description, info.get("Biotype", "")]).lower()
-        con.execute("INSERT INTO genes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (gene_id, alias, row.get("Gene", gene_id), description, info.get("Biotype", ""), "", "", gene_id, info.get("Chromosome", ""), int(info.get("Start") or 0), int(info.get("End") or 0), info.get("Strand", ""), int(row.get("TranscriptCount") or 0), max(0, int(info.get("End") or 0) - int(info.get("Start") or 0) + 1), 0, "", search))
+        search = " ".join([gene_id, row.get("Gene", ""), dcar_tag, alias, description, info.get("Biotype", "")]).lower()
+        con.execute("INSERT INTO genes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (gene_id, alias, row.get("Gene", gene_id), dcar_tag, description, info.get("Biotype", ""), "", "", gene_id, info.get("Chromosome", ""), int(info.get("Start") or 0), int(info.get("End") or 0), info.get("Strand", ""), int(row.get("TranscriptCount") or 0), max(0, int(info.get("End") or 0) - int(info.get("Start") or 0) + 1), 0, "", search))
+        if dcar_tag: con.execute("INSERT INTO gene_annotations VALUES (?,?,?,?)", (gene_id, "NCBI Gene", "LocusTag", dcar_tag))
         for canonical in sorted(knowledge.get(gene_id, set())): con.execute("INSERT INTO gene_annotations VALUES (?,?,?,?)", (gene_id, "Knowledge Engine", "CanonicalName", canonical))
         expression_rows.extend((experiment, gene_id, sample, float(row.get(sample) or 0), 0.0) for sample in samples)
     con.executemany("INSERT INTO expression VALUES (?,?,?,?,?)", expression_rows); con.commit(); con.close()
