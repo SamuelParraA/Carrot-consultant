@@ -1,6 +1,18 @@
 const $ = s => document.querySelector(s);
 let genes = [], selected = null, original = [], lastSvg = '', suggestTimer, appInfo = null, activeExperiment = 'default';
-const displayName = g => decodeURIComponent(String(g.description || g.name || g.gene_id || '')).replace(/, transcript variant.*$/i, '');
+function decodeText(value){
+  try { return decodeURIComponent(String(value || '')); }
+  catch (_) { return String(value || ''); }
+}
+
+// Keep labels concise while retaining the RefSeq LOC identifier for traceability.
+function displayName(g){
+  const description = decodeText(g.description).trim();
+  const identifiers = [g.name, g.alias, g.gene_id].map(decodeText).join('; ');
+  const loc = identifiers.match(/\bLOC\d+\b/i)?.[0];
+  if (description) return loc ? `${description}; ${loc}` : description;
+  return loc || decodeText(g.name).trim() || String(g.gene_id || '');
+}
 const fmt = n => n == null ? '—' : Number(n).toLocaleString('es-CL', {maximumFractionDigits: 3});
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function api(url){let r=await fetch(url);if(!r.ok)throw Error((await r.json()).error);return r.json()}
@@ -101,7 +113,7 @@ function selectGene(g){
 function lineSvg(series, error=false){
   const times = sampleOrder(), W=850,H=350,p={l:70,r:35,t:36,b:62};
   let all = series.flatMap(x => times.map(t => (x.stats[t]?.mean||0)+(x.stats[t]?.sd||0)));
-  let max = Math.max(...all, 1), mid = max/2;
+  let max = niceYAxisMax(Math.max(...all, 0)), mid = max/2;
   let x = i => times.length === 1 ? W/2 : p.l+i*(W-p.l-p.r)/(times.length-1);
   let y = v => H-p.b-v/max*(H-p.t-p.b);
   let colors = ['#0f7659','#c1522b','#4467a8','#8b5aa5','#aa8b19','#168a8a','#444'];
@@ -114,6 +126,16 @@ function lineSvg(series, error=false){
     return `<polyline points="${pts}" fill="none" stroke="${c}" stroke-width="3"/>${bars}${dots}<text x="${p.l+10}" y="${18+j*18}" fill="${c}">${esc(q.name)}</text>`;
   }).join('');
   return `<svg class="svg-chart" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><style>text{font:12px Verdana;fill:#53605b}</style>${yGrid}<line x1="${p.l}" y1="${p.t}" x2="${p.l}" y2="${H-p.b}" stroke="#59645f"/>${xGrid}${paths}<text transform="translate(18 ${H/2}) rotate(-90)" text-anchor="middle">TPM</text></svg>`;
+}
+
+function niceYAxisMax(value){
+  if (!(value > 0)) return 1;
+  const target = value * 1.1;
+  const exponent = Math.floor(Math.log10(target));
+  const magnitude = 10 ** exponent;
+  const fraction = target / magnitude;
+  const niceFraction = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10;
+  return niceFraction * magnitude;
 }
 
 function renderMulti(){
